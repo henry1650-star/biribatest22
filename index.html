@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Biriba - Greek Card Game</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .felt-table { background: linear-gradient(135deg, #1a4d2e 0%, #0f3a21 50%, #1a4d2e 100%); }
+    .card {
+      width: 70px; height: 98px; border-radius: 8px; background: white;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.1);
+      position: relative; user-select: none; transition: all 0.2s;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .card:hover { transform: translateY(-4px); }
+    .card.selected { 
+      transform: translateY(-20px); 
+      box-shadow: 0 8px 16px rgba(251, 191, 36, 0.5), 0 0 0 3px #fbbf24;
+    }
+    .card.draggable { cursor: grab; }
+    .card.dragging { opacity: 0.5; cursor: grabbing; }
+    .card .rank {
+      position: absolute; top: 4px; left: 6px; font-weight: 700;
+      font-size: 16px; line-height: 1;
+    }
+    .card .rank.bottom {
+      top: auto; bottom: 4px; left: auto; right: 6px;
+      transform: rotate(180deg);
+    }
+    .card .suit-center {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%); font-size: 32px;
+    }
+    .card.red { color: #dc2626; }
+    .card.black { color: #1f2937; }
+    .card-back {
+      width: 70px; height: 98px; border-radius: 8px;
+      background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 10px; font-weight: 700;
+      letter-spacing: 1px; flex-shrink: 0;
+    }
+    .biribaki-pile {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 100px;
+      height: 100px;
+    }
+    .biribaki-pile .card-back {
+      position: absolute;
+      width: 70px;
+      height: 98px;
+    }
+    .biribaki-pile .card-back:first-child {
+      transform: rotate(90deg);
+      top: 0;
+      left: 15px;
+    }
+    .biribaki-pile .card-back:last-child {
+      transform: rotate(90deg);
+      top: 10px;
+      left: 25px;
+    }
+    .meld-area {
+      background: rgba(255,255,255,0.08); border-radius: 12px;
+      border: 2px dashed rgba(255,255,255,0.3); padding: 12px;
+      min-height: 140px; max-height: 300px; overflow-y: auto;
+    }
+    .melds-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .meld {
+      background: rgba(255,255,255,0.12); border-radius: 8px;
+      padding: 8px;
+      border: 1px solid rgba(255,255,255,0.2);
+      position: relative;
+      min-height: 60px;
+      width: 100%;
+    }
+    .meld.biriba {
+      border: 3px solid #fbbf24;
+      box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+    }
+    .meld-cards {
+      position: relative;
+      height: 110px;
+      min-width: 60px;
+    }
+    .meld .card {
+      position: absolute;
+      left: 8px;
+      width: 60px;
+      height: 84px;
+    }
+    .meld .card .rank {
+      font-size: 14px;
+    }
+    .meld .card .suit-center {
+      font-size: 24px;
+    }
+    .meld.selected-meld {
+      border: 2px solid #fbbf24;
+      background: rgba(251, 191, 36, 0.2);
+      box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+    }
+    .meld.drag-over {
+      border: 2px solid #10b981;
+      background: rgba(16, 185, 129, 0.2);
+    }
+    .meld-add-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(251, 191, 36, 0.9);
+      color: #1f2937;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+    .meld-add-btn:hover {
+      background: #fbbf24;
+      transform: scale(1.05);
+    }
+    .player-badge {
+      background: rgba(0,0,0,0.6); border-radius: 20px;
+      padding: 8px 16px; color: white; font-size: 14px;
+      font-weight: 600; backdrop-filter: blur(4px);
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    .player-badge.active {
+      border-color: #fbbf24; background: rgba(251, 191, 36, 0.25);
+      box-shadow: 0 0 20px rgba(251, 191, 36, 0.4);
+    }
+    .game-btn {
+      padding: 10px 20px; border-radius: 8px; font-weight: 600;
+      transition: all 0.2s; cursor: pointer; border: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .game-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .game-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .discard-pile {
+      min-width: 200px; height: 126px; border-radius: 12px;
+      border: 3px dashed rgba(255,255,255,0.3);
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.2);
+      padding: 10px;
+      position: relative;
+    }
+    .discard-fan {
+      position: relative;
+      height: 100%;
+      display: flex;
+      align-items: center;
+    }
+    .discard-fan .card {
+      position: absolute;
+      width: 60px;
+      height: 84px;
+    }
+    .discard-fan .card .rank {
+      font-size: 14px;
+    }
+    .discard-fan .card .suit-center {
+      font-size: 24px;
+    }
+    .deck-pile {
+      width: 90px; height: 126px; position: relative;
+    }
+    .score-display {
+      background: rgba(0,0,0,0.6); border-radius: 12px;
+      padding: 12px 20px; color: white; font-weight: 700;
+      backdrop-filter: blur(4px); border: 2px solid rgba(255,255,255,0.2);
+    }
+  </style>
+</head>
+<body class="bg-gray-900">
+  <div id="root"></div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getDatabase, ref, set, get, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBSpMtjkrhm0m-XHF_gitmQ8_R7Ao4yUS0",
+      authDomain: "biriba-claude.firebaseapp.com",
+      databaseURL: "https://biriba-claude-default-rtdb.firebaseio.com",
+      projectId: "biriba-claude",
+      storageBucket: "biriba-claude.firebasestorage.app",
+      messagingSenderId: "499017543053",
+      appId: "1:499017543053:web:63e87ba6d75fc4b5e2e1c4"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const SUITS = ['♠', '♥', '♦', '♣'];
+    const RANKS = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+    const toArray = v => Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []);
+    const isRed = s => s === '♥' || s === '♦';
+
+    const createDeck = () => {
+      const d = [];
+      for (let i = 0; i < 2; i++) {
+        for (const s of SUITS) {
+          for (const r of ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']) {
+            d.push({ suit: s, rank: r, id: `${s}-${r}-${i}-${Math.random().toString(36).slice(2, 6)}` });
+          }
+        }
+        d.push({ suit: 'JOKER', rank: 'JOKER', id: `JOKER-${i}-a-${Math.random().toString(36).slice(2, 6)}` });
+        d.push({ suit: 'JOKER', rank: 'JOKER', id: `JOKER-${i}-b-${Math.random().toString(36).slice(2, 6)}` });
+      }
+      return d;
+    };
+
+    const shuffle = a => {
+      a = [...a];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    };
+
+    const deepNormalize = raw => {
+      raw = raw || {};
+      return {
+        state: raw.state ?? 'lobby',
+        deck: toArray(raw.deck),
+        discardPile: toArray(raw.discardPile),
+        players: raw.players || {},
+        teams: raw.teams || { A: [], B: [] },
+        hands: raw.hands || {},
+        melds: raw.melds || { A: [], B: [] },
+        turnOrder: toArray(raw.turnOrder),
+        currentPlayerIndex: Number.isInteger(raw.currentPlayerIndex) ? raw.currentPlayerIndex : 0,
+        turnPhase: raw.turnPhase ?? 'mustDraw',
+        turnStash: raw.turnStash || {},
+        scores: raw.scores || { A: 0, B: 0 },
+        hasDrawn: raw.hasDrawn || {},
+        trumpSuit: raw.trumpSuit || null,
+        biribakiTaken: raw.biribakiTaken || { A: false, B: false }
+      };
+    };
+
+    const rankVal = r => ({ "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14 }[r] || 0);
+    const isWild = c => c.rank === 'JOKER' || c.rank === '2';
+
+    function sortHand(arr) {
+      const wilds = arr.filter(isWild);
+      const regulars = arr.filter(c => !isWild(c));
+      regulars.sort((a, b) => {
+        if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
+        return rankVal(a.rank) - rankVal(b.rank);
+      });
+      return [...regulars, ...wilds];
+    }
+
+    function inferMeldSequence(cards) {
+      const nonWild = cards.filter(c => !isWild(c));
+      if (nonWild.length === 0) return cards;
+      
+      const suit = nonWild[0].suit;
+      const vals = nonWild.map(c => ({ card: c, val: rankVal(c.rank) })).sort((a, b) => a.val - b.val);
+      const wilds = cards.filter(isWild);
+      
+      // Separate 2s of same suit vs other wilds
+      const twosOfSameSuit = wilds.filter(c => c.rank === '2' && c.suit === suit);
+      const otherWilds = wilds.filter(c => c.rank === 'JOKER' || (c.rank === '2' && c.suit !== suit));
+      
+      let sequence = [];
+      let minVal = vals[0].val;
+      let maxVal = vals[vals.length - 1].val;
+      
+      // Check if we need a 2 in the "2" position (between A and 3)
+      const hasAce = vals.some(v => v.val === 14);
+      const hasThree = vals.some(v => v.val === 3);
+      let twoInPosition = null;
+      
+      if (hasAce && hasThree && twosOfSameSuit.length > 0) {
+        twoInPosition = twosOfSameSuit[0];
+        minVal = 2; // Extend sequence to include 2
+      }
+      
+      // Build sequence, filling gaps with wilds
+      let wildIndex = 0;
+      const availableWilds = otherWilds.concat(twosOfSameSuit.filter(c => c !== twoInPosition));
+      
+      for (let v = minVal; v <= maxVal; v++) {
+        if (v === 2 && twoInPosition) {
+          sequence.push(twoInPosition);
+        } else {
+          const existing = vals.find(x => x.val === v);
+          if (existing) {
+            sequence.push(existing.card);
+          } else if (wildIndex < availableWilds.length) {
+            // Fill gap with wild
+            sequence.push(availableWilds[wildIndex]);
+            wildIndex++;
+          }
+        }
+      }
+      
+      // Any remaining wilds shouldn't be added to end (unplayable position)
+      // They would have been caught by validation
+      
+      return sequence;
+    }
+
+    function canFormRun(cards) {
+      if (cards.length < 3) return false;
+      const nonWild = cards.filter(c => !isWild(c));
+      if (nonWild.length === 0) return false;
+      const suit = nonWild[0].suit;
+      if (nonWild.some(c => c.suit !== suit)) return false;
+      
+      const wilds = cards.filter(isWild);
+      const jokers = wilds.filter(c => c.rank === 'JOKER');
+      const twos = wilds.filter(c => c.rank === '2');
+      const twosOfSameSuit = twos.filter(c => c.suit === suit);
+      const otherWilds = [...jokers, ...twos.filter(c => c.suit !== suit)];
+      
+      if (otherWilds.length > 1) return false;
+      if (otherWilds.length === 1 && twosOfSameSuit.length > 0) {
+        const hasAce = nonWild.some(c => c.rank === 'A');
+        const hasThree = nonWild.some(c => c.rank === '3');
+        if (!hasAce || !hasThree) return false;
+      }
+      
+      const vals = nonWild.map(c => rankVal(c.rank)).sort((a, b) => a - b);
+      let wild = wilds.length;
+      
+      for (let i = 1; i < vals.length; i++) {
+        if (vals[i] === vals[i - 1]) return false;
+      }
+      
+      let needed = 0;
+      for (let i = 1; i < vals.length; i++) {
+        const gap = vals[i] - vals[i - 1] - 1;
+        if (gap > 0) needed += gap;
+      }
+      
+      return needed <= wild;
+    }
+
+    function isBiriba(meld) {
+      return toArray(meld).length >= 7;
+    }
+
+    function isCleanBiriba(meld) {
+      const cards = toArray(meld);
+      if (cards.length < 7) return false;
+      return !cards.some(c => isWild(c));
+    }
+
+    function getMeldSuit(meld) {
+      const cards = toArray(meld);
+      const nonWild = cards.find(c => !isWild(c));
+      return nonWild ? nonWild.suit : null;
+    }
+
+    function calculateScore(melds, trumpSuit) {
+      let score = 0;
+      const meldArray = toArray(melds);
+      
+      for (const meld of meldArray) {
+        const cards = toArray(meld);
+        
+        for (const card of cards) {
+          if (card.rank === 'JOKER') score += 30;
+          else if (card.rank === '2') score += 20;
+          else if (card.rank === 'A') score += 15;
+          else if (['8', '9', '10', 'J', 'Q', 'K'].includes(card.rank)) score += 10;
+          else score += 5;
+        }
+        
+        if (isBiriba(meld)) {
+          const clean = isCleanBiriba(meld);
+          const suit = getMeldSuit(meld);
+          const isTrump = suit === trumpSuit;
+          
+          if (clean && isTrump) {
+            score += 600;
+          } else if (clean) {
+            score += 200;
+          } else if (isTrump) {
+            score += 300;
+          } else {
+            score += 100;
+          }
+        }
+      }
+      
+      return score;
+    }
+
+    class Game {
+      constructor() {
+        this.gameId = '';
+        const _pid = localStorage.getItem('biriba_pid');
+        this.playerId = _pid || (() => {
+          const id = Math.random().toString(36).slice(2, 9);
+          try { localStorage.setItem('biriba_pid', id) } catch { }
+          return id;
+        })();
+        this.state = null;
+        this.copied = false;
+        this.selectedCards = new Set();
+        this.selectedMeldIndex = null;
+        this.draggedCard = null;
+        this.dragSource = null;
+      }
+
+      async init() {
+        const q = new URLSearchParams(location.search);
+        const gid = q.get('game');
+        if (gid) {
+          this.gameId = gid;
+          const s = await get(ref(db, `games/${gid}`));
+          if (!s.val()) await this.bootstrap(gid);
+        } else {
+          const id = Math.random().toString(36).slice(2, 9);
+          this.gameId = id;
+          history.pushState({}, '', `?game=${id}`);
+          await this.bootstrap(id);
+        }
+        onValue(ref(db, `games/${this.gameId}`), (snap) => {
+          this.state = deepNormalize(snap.val() || {});
+          this.autoReady();
+          this.render();
+        });
+      }
+
+      async bootstrap(id) {
+        await set(ref(db, `games/${id}`), {
+          players: {}, teams: { A: [], B: [] }, state: 'lobby', deck: [], hands: {},
+          discardPile: [], melds: { A: [], B: [] }, turnOrder: [], currentPlayerIndex: 0,
+          turnPhase: 'mustDraw', turnStash: {}, scores: { A: 0, B: 0 }, hasDrawn: {}, 
+          trumpSuit: null, biribakiTaken: { A: false, B: false }, createdAt: Date.now()
+        });
+      }
+
+      async autoReady() {
+        const t = this.state.teams || { A: [], B: [] };
+        const total = (t.A?.length || 0) + (t.B?.length || 0);
+        if (this.state.state !== 'lobby' || total !== 4) return;
+        await runTransaction(ref(db, `games/${this.gameId}`), (c) => {
+          if (!c || c.state !== 'lobby') return c;
+          const A = toArray(c.teams?.A), B = toArray(c.teams?.B);
+          if (A.length + B.length !== 4) return c;
+          return {
+            ...c, state: 'ready', turnOrder: [A[0], B[0], A[1], B[1]].filter(Boolean),
+            currentPlayerIndex: 0, turnPhase: 'mustDraw'
+          };
+        });
+      }
+
+      async startGame() {
+        await runTransaction(ref(db, `games/${this.gameId}`), (c) => {
+          if (!c || c.state !== 'ready') return c;
+          const A = toArray(c.teams?.A), B = toArray(c.teams?.B);
+          const order = (Array.isArray(c.turnOrder) && c.turnOrder.length) ? c.turnOrder : [A[0], B[0], A[1], B[1]].filter(Boolean);
+          let deck = shuffle(createDeck());
+          const hands = { ...(c.hands || {}) };
+          for (const pid of order) {
+            hands[pid] = sortHand(deck.slice(0, 11));
+            deck = deck.slice(11);
+          }
+          const firstDiscard = deck.length ? deck[0] : null;
+          const trumpSuit = firstDiscard && firstDiscard.suit !== 'JOKER' ? firstDiscard.suit : null;
+          const discard = firstDiscard ? [firstDiscard] : [];
+          deck = deck.length ? deck.slice(1) : [];
+          return {
+            ...c, state: 'playing', turnOrder: order, hands, deck,
+            discardPile: discard, currentPlayerIndex: 0, turnPhase: 'mustDraw', 
+            turnStash: {}, hasDrawn: {}, trumpSuit, biribakiTaken: { A: false, B: false }
+          };
+        });
+      }
+
+      isMyTurn() {
+        const o = this.state?.turnOrder || [];
+        return o[this.state?.currentPlayerIndex || 0] === this.playerId;
+      }
+
+      hasDrawnThisTurn() {
+        return this.state?.hasDrawn?.[this.playerId] === true;
+      }
+
+      seats() {
+        const order = this.state.turnOrder || [];
+        const me = Math.max(0, order.indexOf(this.playerId));
+        const rot = i => order[(me + i) % order.length];
+        return { bottom: rot(0), right: rot(1), top: rot(2), left: rot(3) };
+      }
+
+      teamOf(pid) {
+        const t = this.state?.teams || { A: [], B: [] };
+        if (toArray(t.A).includes(pid)) return 'A';
+        if (toArray(t.B).includes(pid)) return 'B';
+        return null;
+      }
+
+      share() {
+        const url = `${location.origin}${location.pathname}?game=${this.gameId}`;
+        navigator.clipboard?.writeText(url).then(() => {
+          this.copied = true;
+          this.render();
+          setTimeout(() => { this.copied = false; this.render(); }, 1200);
+        });
+      }
+
+      toggleCardSelection(cardId) {
+        if (this.selectedCards.has(cardId)) {
+          this.selectedCards.delete(cardId);
+        } else {
+          this.selectedCards.add(cardId);
+        }
+        this.render();
+      }
+
+      selectMeld(index) {
+        this.selectedMeldIndex = index;
+        this.render();
+      }
+
+      canPlaySelected() {
+        if (this.selectedCards.size === 0) return false;
+        if (!this.hasDrawnThisTurn()) return false;
+        
+        const myHand = toArray(this.state.hands?.[this.playerId]);
+        const selectedCardObjs = myHand.filter(c => this.selectedCards.has(c.id));
+        
+        if (this.selectedMeldIndex !== null) {
+          const team = this.teamOf(this.playerId);
+          if (!team) return false;
+          const myMelds = toArray(this.state.melds?.[team]);
+          if (myMelds[this.selectedMeldIndex]) {
+            const existingMeld = toArray(myMelds[this.selectedMeldIndex]);
+            const combined = [...existingMeld, ...selectedCardObjs];
+            return canFormRun(combined);
+          }
+        }
+        
+        return selectedCardObjs.length >= 3 && canFormRun(selectedCardObjs);
+      }
+
+      async playSelectedCards() {
+        if (this.selectedCards.size === 0) return;
+        if (!this.isMyTurn() || !this.hasDrawnThisTurn()) return;
+        
+        const team = this.teamOf(this.playerId);
+        if (!team) return;
+
+        const myHand = toArray(this.state.hands?.[this.playerId]);
+        const selectedCardObjs = myHand.filter(c => this.selectedCards.has(c.id));
+        
+        await runTransaction(ref(db, `games/${this.gameId}`), (c) => {
+          if (!c || c.state !== 'playing') return c;
+          const hands = { ...(c.hands || {}) };
+          const my = toArray(hands[this.playerId]);
+          
+          const cardIds = Array.from(this.selectedCards);
+          const cards = my.filter(card => cardIds.includes(card.id));
+          const remaining = my.filter(card => !cardIds.includes(card.id));
+          
+          const melds = { A: toArray(c.melds?.A), B: toArray(c.melds?.B) };
+          const list = [...(melds[team] || [])];
+          
+          if (this.selectedMeldIndex !== null && list[this.selectedMeldIndex]) {
+            const existingMeld = toArray(list[this.selectedMeldIndex]);
+            const combined = [...existingMeld, ...cards];
+            
+            if (!canFormRun(combined)) {
+              alert('Selected cards cannot be added to this meld');
+              return c;
+            }
+            
+            list[this.selectedMeldIndex] = combined;
+          } else {
+            if (!canFormRun(cards)) {
+              alert('Selected cards do not form a valid meld');
+              return c;
+            }
+            list.push(cards);
+          }
+          
+          hands[this.playerId] = sortHand(remaining);
+          
+          // Check if player went out (no cards left)
+          let biribakiTaken = { ...(c.biribakiTaken || { A: false, B: false }) };
+          let newPhase = c.turnPhase;
+          
+          if (remaining.length === 0 && !biribakiTaken[team]) {
+            // Player went out without discarding - auto pickup biribaki
+            biribakiTaken[team] = true;
+            // Give player 11 cards from biribaki (simulated)
+            const biribakiCards = [];
+            for (let i = 0; i < 11; i++) {
+              biribakiCards.push({
+                suit: '♠',
+                rank: 'A',
+                id: `biribaki-${team}-${i}-${Math.random().toString(36).slice(2, 6)}`
+              });
+            }
+            hands[this.playerId] = sortHand(biribakiCards);
+            newPhase = 'mustDiscard'; // Continue playing
+          }
+          
+          const stash = { ...(c.turnStash || {}) };
+          stash[this.playerId] = [...(stash[this.playerId] || []), ...cardIds];
+          
+          return { ...c, hands, melds: { ...melds, [team]: list }, turnStash: stash, biribakiTaken, turnPhase: newPhase };
+        });
+
+        this.selectedCards.clear();
+        this.selectedMeldIndex = null;
+        this.render();
+      }
+
+      async draw() {
+        if (!this.isMyTurn()) return;
+        await runTransaction(ref(db, `games/${this.gameId}`), (c) => {
+          if (!c || c.state !== 'playing' || c.turnPhase !== 'mustDraw') return c;
+          const deck = toArray(c.deck);
+          if (!deck.length) return c;
+          const order = toArray(c.turnOrder);
+          if (order[c.currentPlayerIndex || 0] !== this.playerId) return c;
+          const hands = { ...(c.hands || {}) };
+          const my = toArray(hands[this.playerId]);
+          hands[this.playerId] = sortHand([...my, deck[0]]);
+          const hasDrawn = { ...(c.hasDrawn || {}) };
+          hasDrawn[this.playerId] = true;
+          return { ...c, deck: deck.slice(1), hands, turnPhase: 'mustDiscard', hasDrawn };
+        });
+      }
+
+      async takeDiscard() {
+        if (!this.isMyTurn()) return;
+        await runTransaction(ref(db, `games/${this.gameId}`), (c) => {
+          if (!c || c.state !== 'playing' || c.turnPhase !== 'mustDraw') return c;
+          const pile = toArray(c.discardPile);
+          if (!pile.length) return c;
+          const order = toArray(c.turnOrder);
+          if (order[c.currentPlayerIndex || 0] !== this.playerId) return c;
+          const hands = { ...(c.hands || {}) };
+          const my = toArray(hands[this.playerId]);
+          hands[this.playerId] = sortHand([...my, ...pile]);
+          const hasDrawn = { ...(c.hasDrawn || {}) };
+          hasDrawn[this.playerId] = true;
+          return { ...c, discardPile: [], hands, turnPhase: 'mustDiscard', hasDrawn };
+        });
+      }
+
+      async discardSelected() {
+        if (this.selectedCards.size !== 1) {
+          alert('Please select exactly one card to discard');
+          return;
+        }
+        const cardId = Array.from(this.selectedCards)[0];
+        await this.discard(cardId);
+        this.selectedCards.clear();
+      }
+
+      async discard(cardId) {
+        if (!this.isMyTurn()) return;
+        const team = this.teamOf(this.playerId);
+        
+        await runTransaction(ref(db, `games/${this.gameId}`), (c) => {
+          if (!c || c.state !== 'playing' || c.turnPhase !== 'mustDiscard') return c;
+          const hands = { ...(c.hands || {}) };
+          const my = toArray(hands[this.playerId]);
+          const idx = my.findIndex(x => x && x.id === cardId);
+          if (idx < 0) return c;
+          const card = my[idx];
+          const remaining = sortHand([...my.slice(0, idx), ...my.slice(idx + 1)]);
+          
+          let biribakiTaken = { ...(c.biribakiTaken || { A: false, B: false }) };
+          let finalHand = remaining;
+          
+          // Check if player went out by discarding last card
+          if (remaining.length === 0 && !biribakiTaken[team]) {
+            // Pick up biribaki but turn ends
+            biribakiTaken[team] = true;
+            const biribakiCards = [];
+            for (let i = 0; i < 11; i++) {
+              biribakiCards.push({
+                suit: '♠',
+                rank: 'A',
+                id: `biribaki-${team}-${i}-${Math.random().toString(36).slice(2, 6)}`
+              });
+            }
+            finalHand = sortHand(biribakiCards);
+          }
+          
+          hands[this.playerId] = finalHand;
+          
+          const scores = {
+            A: calculateScore(toArray(c.melds?.A), c.trumpSuit),
+            B: calculateScore(toArray(c.melds?.B), c.trumpSuit)
+          };
+          
+          const o = toArray(c.turnOrder);
+          const next = o.length ? ((c.currentPlayerIndex || 0) + 1) % o.length : 0;
+          const hasDrawn = { ...(c.hasDrawn || {}) };
+          hasDrawn[this.playerId] = false;
+          
+          return { 
+            ...c, 
+            hands, 
+            discardPile: [card, ...toArray(c.discardPile)], 
+            currentPlayerIndex: next, 
+            turnPhase: 'mustDraw', 
+            turnStash: {}, 
+            scores,
+            hasDrawn,
+            biribakiTaken
+          };
+        });
+      }
+
+      async moveWildInMeld(meldIndex, cardId, targetPosition) {
+        const team = this.teamOf(this.playerId);
+        if (!team || !this.isMyTurn()) return;
+
+        await runTransaction(ref(db, `games/${this.gameId}`), (c) => {
+          if (!c || c.state !== 'playing') return c;
+          
+          const melds = { A: toArray(c.melds?.A), B: toArray(c.melds?.B) };
+          const list = [...(melds[team] || [])];
+          const meld = toArray(list[meldIndex]);
+          
+          const cardIndex = meld.findIndex(card => card.id === cardId);
+          if (cardIndex === -1) return c;
+          
+          const card = meld[cardIndex];
+          if (!isWild(card)) return c;
+          
+          const newMeld = [...meld];
+          newMeld.splice(cardIndex, 1);
+          newMeld.splice(targetPosition, 0, card);
+          
+          if (!canFormRun(newMeld)) return c;
+          
+          list[meldIndex] = newMeld;
+          return { ...c, melds: { ...melds, [team]: list } };
+        });
+      }
+
+      cardEl(card, opts = {}) {
+        const { selectable = false, meldCard = false, offset = 0, draggable = false, meldIndex = null, cardIndex = null } = opts;
+        const isSelected = this.selectedCards.has(card.id);
+        const cls = `card ${isRed(card.suit) ? 'red' : 'black'} ${isSelected ? 'selected' : ''} ${draggable ? 'draggable' : ''}`;
+        const onclick = selectable ? `onclick="game.toggleCardSelection('${card.id}')"` : '';
+        const style = meldCard ? `top: ${offset * 30}px; z-index: ${offset};` : '';
+        const dragAttr = draggable ? `draggable="true" data-card-id="${card.id}" data-meld-index="${meldIndex}" data-card-index="${cardIndex}"` : '';
+        return `<div class="${cls}" ${onclick} ${dragAttr} style="${style}">
+          <div class="rank">${card.rank === 'JOKER' ? '🃏' : card.rank}<br>${card.suit === 'JOKER' ? '' : card.suit}</div>
+          <div class="rank bottom">${card.rank === 'JOKER' ? '🃏' : card.rank}<br>${card.suit === 'JOKER' ? '' : card.suit}</div>
+          <div class="suit-center">${card.rank === 'JOKER' ? '🃏' : card.suit}</div>
+        </div>`;
+      }
+
+      discardPileFan(cards) {
+        if (cards.length === 0) {
+          return '<div class="text-white/50 text-sm">Discard Pile</div>';
+        }
+        
+        const maxVisible = 10;
+        const visibleCards = cards.slice(0, maxVisible);
+        const offset = Math.min(15, 150 / visibleCards.length);
+        
+        return `<div class="discard-fan">
+          ${visibleCards.map((card, i) => {
+            const style = `left: ${i * offset}px; z-index: ${i};`;
+            return `<div class="card ${isRed(card.suit) ? 'red' : 'black'}" style="${style}">
+              <div class="rank">${card.rank === 'JOKER' ? '🃏' : card.rank}<br>${card.suit === 'JOKER' ? '' : card.suit}</div>
+              <div class="rank bottom">${card.rank === 'JOKER' ? '🃏' : card.rank}<br>${card.suit === 'JOKER' ? '' : card.suit}</div>
+              <div class="suit-center">${card.rank === 'JOKER' ? '🃏' : card.suit}</div>
+            </div>`;
+          }).join('')}
+          ${cards.length > maxVisible ? `<div class="text-white text-xs ml-2" style="position: absolute; left: ${visibleCards.length * offset + 10}px;">+${cards.length - maxVisible}</div>` : ''}
+        </div>`;
+      }
+
+      backEl(count = 1) {
+        if (count === 0) return '<div class="text-gray-400 text-sm">Empty</div>';
+        return `<div class="relative inline-flex" style="width: ${70 + Math.min(count - 1, 4) * 4}px; height: 98px;">
+          ${Array.from({ length: Math.min(count, 5) }).map((_, i) =>
+          `<div class="card-back absolute" style="left: ${i * 4}px; top: ${i * 2}px;"></div>`
+        ).join('')}
+        </div>`;
+      }
+
+      biribakiEl(remaining) {
+        if (remaining === 0) return '';
+        if (remaining === 1) {
+          return `<div class="biribaki-pile">
+            <div class="card-back">📦</div>
+          </div>`;
+        }
+        return `<div class="biribaki-pile">
+          <div class="card-back">📦</div>
+          <div class="card-back">📦</div>
+        </div>`;
+      }
+
+      playerBadge(pid) {
+        if (!pid) return '';
+        const name = this.state.players?.[pid]?.name || 'Player';
+        const count = (this.state.hands?.[pid] || []).length;
+        const active = this.state.turnOrder?.[this.state.currentPlayerIndex] === pid;
+        return `<div class="player-badge ${active ? 'active' : ''}">${name} • ${count} cards</div>`;
+      }
+
+      setupDragAndDrop() {
+        document.querySelectorAll('.meld .card[draggable="true"]').forEach(el => {
+          el.addEventListener('dragstart', (e) => {
+            el.classList.add('dragging');
+            this.draggedCard = e.target.dataset.cardId;
+            this.dragSource = {
+              meldIndex: parseInt(e.target.dataset.meldIndex),
+              cardIndex: parseInt(e.target.dataset.cardIndex)
+            };
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          
+          el.addEventListener('dragend', () => {
+            el.classList.remove('dragging');
+          });
+        });
+
+        document.querySelectorAll('.meld').forEach(el => {
+          el.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            el.classList.add('drag-over');
+          });
+          
+          el.addEventListener('dragleave', () => {
+            el.classList.remove('drag-over');
+          });
+          
+          el.addEventListener('drop', (e) => {
+            e.preventDefault();
+            el.classList.remove('drag-over');
+            
+            if (!this.draggedCard || !this.dragSource) return;
+            
+            const meldIndex = parseInt(el.dataset.meldIndex);
+            const rect = el.getBoundingClientRect();
+            const relativeY = e.clientY - rect.top;
+            const targetPosition = Math.floor(relativeY / 30);
+            
+            this.moveWildInMeld(meldIndex, this.draggedCard, Math.max(0, targetPosition));
+            
+            this.draggedCard = null;
+            this.dragSource = null;
+          });
+        });
+      }
+
+      render() {
+        if (!this.state) {
+          document.getElementById('root').innerHTML = '<div class="flex items-center justify-center min-h-screen text-white text-2xl">Loading...</div>';
+          return;
+        }
+
+        const t = this.state.teams || { A: [], B: [] }, p = this.state.players || {};
+        const A = toArray(t.A), B = toArray(t.B);
+
+        if (this.state.state === 'lobby') {
+          const already = !!this.teamOf(this.playerId) || !!(p[this.playerId]);
+          const myT = this.teamOf(this.playerId);
+          const myName = p[this.playerId]?.name || (() => { try { return localStorage.getItem('biriba_name') || '' } catch { return '' } })();
+          document.getElementById('root').innerHTML = `
+            <div class="min-h-screen flex items-center justify-center px-4" style="background: linear-gradient(135deg, #1a4d2e 0%, #0f3a21 100%);">
+              <div class="max-w-2xl w-full">
+                <div class="flex items-center justify-between mb-6">
+                  <h1 class="text-5xl font-bold text-white" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">🃏 Biriba</h1>
+                  <button class="game-btn bg-indigo-600 hover:bg-indigo-700 text-white" onclick="game.share()">
+                    ${this.copied ? '✓ Link Copied!' : '📋 Share Game'}
+                  </button>
+                </div>
+                <div class="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8">
+                  <div class="grid grid-cols-2 gap-6 mb-6">
+                    <div class="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100">
+                      <div class="text-xl font-bold text-blue-800 mb-3">Team A</div>
+                      ${A.length === 0 ? '<div class="text-blue-600">Waiting for players...</div>' : A.map(id => `<div class="text-blue-700 font-medium mb-1">👤 ${p[id]?.name || 'Player'}</div>`).join('')}
+                    </div>
+                    <div class="p-6 rounded-xl bg-gradient-to-br from-red-50 to-red-100">
+                      <div class="text-xl font-bold text-red-800 mb-3">Team B</div>
+                      ${B.length === 0 ? '<div class="text-red-600">Waiting for players...</div>' : B.map(id => `<div class="text-red-700 font-medium mb-1">👤 ${p[id]?.name || 'Player'}</div>`).join('')}
+                    </div>
+                  </div>
+                  ${already ? `
+                    <div class="p-4 rounded-lg bg-emerald-50 border-2 border-emerald-300 text-center">
+                      <div class="text-emerald-800 font-semibold text-lg">Joined Team ${myT}${myName ? ` as ${myName}` : ''}</div>
+                      <div class="text-emerald-600 mt-1">Waiting for ${Math.max(0, 4 - (A.length + B.length))} more players...</div>
+                    </div>
+                  ` : `
+                    <div class="space-y-4">
+                      <input id="pname" type="text" placeholder="Enter your name" value="${myName || ''}"
+                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-lg focus:border-blue-500 focus:outline-none">
+                      <div class="grid grid-cols-2 gap-4">
+                        <button class="game-btn bg-blue-600 hover:bg-blue-700 text-white" 
+                          ${A.length >= 2 ? 'disabled' : ''}
+                          onclick="game.join(document.getElementById('pname').value, 'A')">
+                          Join Team A (${A.length}/2)
+                        </button>
+                        <button class="game-btn bg-red-600 hover:bg-red-700 text-white"
+                          ${B.length >= 2 ? 'disabled' : ''}
+                          onclick="game.join(document.getElementById('pname').value, 'B')">
+                          Join Team B (${B.length}/2)
+                        </button>
+                      </div>
+                    </div>
+                  `}
+                </div>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        if (this.state.state === 'ready') {
+          const order = (this.state.turnOrder || []).map(id => p[id]?.name || 'Player').join(' → ');
+          document.getElementById('root').innerHTML = `
+            <div class="min-h-screen flex items-center justify-center px-4" style="background: linear-gradient(135deg, #1a4d2e 0%, #0f3a21 100%);">
+              <div class="max-w-2xl w-full">
+                <div class="flex items-center justify-between mb-6">
+                  <h1 class="text-5xl font-bold text-white" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">🃏 Biriba</h1>
+                  <button class="game-btn bg-indigo-600 hover:bg-indigo-700 text-white" onclick="game.share()">
+                    ${this.copied ? '✓ Link Copied!' : '📋 Share Game'}
+                  </button>
+                </div>
+                <div class="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 space-y-6">
+                  <div class="grid grid-cols-2 gap-6">
+                    <div class="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100">
+                      <div class="text-xl font-bold text-blue-800 mb-3">Team A</div>
+                      ${A.map(id => `<div class="text-blue-700 font-medium mb-1">👤 ${p[id]?.name || 'Player'}</div>`).join('')}
+                    </div>
+                    <div class="p-6 rounded-xl bg-gradient-to-br from-red-50 to-red-100">
+                      <div class="text-xl font-bold text-red-800 mb-3">Team B</div>
+                      ${B.map(id => `<div class="text-red-700 font-medium mb-1">👤 ${p[id]?.name || 'Player'}</div>`).join('')}
+                    </div>
+                  </div>
+                  <div class="p-4 rounded-lg bg-emerald-50 border-2 border-emerald-300">
+                    <div class="text-emerald-800 font-semibold">Turn Order:</div>
+                    <div class="text-emerald-700 mt-1">${order}</div>
+                  </div>
+                  <div class="text-center">
+                    <button class="game-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xl px-12 py-4" onclick="game.startGame()">
+                      🎮 Start Game
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+          return;
+        }
+
+        // PLAYING STATE
+        const seat = this.seats();
+        const myHand = toArray(this.state.hands?.[seat.bottom]);
+        const discardPile = toArray(this.state.discardPile);
+        const phase = this.state.turnPhase;
+        const canDraw = this.isMyTurn() && phase === 'mustDraw';
+        const canTake = this.isMyTurn() && phase === 'mustDraw' && discardPile.length > 0;
+        const canPlay = this.canPlaySelected();
+        const canDiscard = this.isMyTurn() && phase === 'mustDiscard' && this.selectedCards.size === 1;
+
+        const myTeam = this.teamOf(this.playerId) || 'A';
+        const oppTeam = (myTeam === 'A' ? 'B' : 'A');
+        const myMelds = toArray(this.state.melds?.[myTeam]);
+        const oppMelds = toArray(this.state.melds?.[oppTeam]);
+        
+        const biribakiA = this.state.biribakiTaken?.A ? 0 : 1;
+        const biribakiB = this.state.biribakiTaken?.B ? 0 : 1;
+        const totalBiribaki = biribakiA + biribakiB;
+
+        document.getElementById('root').innerHTML = `
+          <div class="min-h-screen flex items-center justify-center p-4 felt-table">
+            <div class="w-full max-w-7xl">
+              <!-- Header with Scores -->
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-4">
+                  <h1 class="text-3xl font-bold text-white" style="text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">🃏 Biriba</h1>
+                  <div class="score-display">
+                    <div class="text-blue-300 text-sm">Team A</div>
+                    <div class="text-2xl">${this.state.scores?.A || 0}</div>
+                  </div>
+                  <div class="score-display">
+                    <div class="text-red-300 text-sm">Team B</div>
+                    <div class="text-2xl">${this.state.scores?.B || 0}</div>
+                  </div>
+                  ${this.state.trumpSuit ? `<div class="text-white text-sm">Trump: ${this.state.trumpSuit}</div>` : ''}
+                </div>
+                <button class="game-btn bg-indigo-600 hover:bg-indigo-700 text-white text-sm" onclick="game.share()">
+                  ${this.copied ? '✓ Copied!' : '📋 Share'}
+                </button>
+              </div>
+
+              <!-- Game Table -->
+              <div class="relative bg-gradient-to-br from-green-900/40 to-green-800/40 rounded-3xl shadow-2xl backdrop-blur" style="min-height: 780px; padding: 20px;">
+                
+                <!-- Biribaki at top left -->
+                ${this.biribakiEl(totalBiribaki)}
+                
+                <!-- Top Player -->
+                <div class="absolute left-1/2 -translate-x-1/2 flex flex-col items-center gap-2" style="top: 20px;">
+                  ${this.playerBadge(seat.top)}
+                  ${this.backEl((this.state.hands?.[seat.top] || []).length)}
+                </div>
+
+                <!-- Left Player -->
+                <div class="absolute top-1/2 -translate-y-1/2 flex flex-col items-center gap-2" style="left: 20px;">
+                  ${this.playerBadge(seat.left)}
+                  <div style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                    ${this.backEl((this.state.hands?.[seat.left] || []).length)}
+                  </div>
+                </div>
+
+                <!-- Right Player -->
+                <div class="absolute top-1/2 -translate-y-1/2 flex flex-col items-center gap-2" style="right: 20px;">
+                  ${this.playerBadge(seat.right)}
+                  <div style="writing-mode: vertical-rl; transform: rotate(180deg);">
+                    ${this.backEl((this.state.hands?.[seat.right] || []).length)}
+                  </div>
+                </div>
+
+                <!-- Center Area -->
+                <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-4" style="width: 700px; margin-top: -40px;">
+                  
+                  <!-- Deck and Discard -->
+                  <div class="flex items-center gap-6">
+                    <div class="flex flex-col items-center gap-2">
+                      <div class="deck-pile">${this.backEl(this.state.deck.length)}</div>
+                      <button class="game-btn bg-indigo-600 hover:bg-indigo-700 text-white text-sm" ${canDraw ? '' : 'disabled'} onclick="game.draw()">
+                        Draw Card
+                      </button>
+                    </div>
+                    
+                    <div class="flex flex-col items-center gap-2">
+                      <div class="discard-pile">
+                        ${this.discardPileFan(discardPile)}
+                      </div>
+                      <button class="game-btn bg-sky-600 hover:bg-sky-700 text-white text-sm" ${canTake ? '' : 'disabled'} onclick="game.takeDiscard()">
+                        Take Pile (${discardPile.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Action Buttons -->
+                  <div class="flex gap-3">
+                    ${!this.hasDrawnThisTurn() && this.isMyTurn() ? `
+                      <div class="game-btn bg-yellow-600 text-white px-6 py-2 opacity-75">
+                        ⚠️ Draw first to play melds
+                      </div>
+                    ` : ''}
+                    ${canPlay ? `
+                      <button class="game-btn bg-purple-600 hover:bg-purple-700 text-white px-6 py-2" onclick="game.playSelectedCards()">
+                        🎴 ${this.selectedMeldIndex !== null ? 'Add to Meld' : 'Play New Meld'} (${this.selectedCards.size})
+                      </button>
+                    ` : ''}
+                    ${this.selectedCards.size > 0 && this.selectedMeldIndex !== null ? `
+                      <button class="game-btn bg-gray-600 hover:bg-gray-700 text-white px-4 py-2" onclick="game.selectedMeldIndex = null; game.render()">
+                        ✖ Clear Selection
+                      </button>
+                    ` : ''}
+                    ${canDiscard ? `
+                      <button class="game-btn bg-orange-600 hover:bg-orange-700 text-white px-6 py-2" onclick="game.discardSelected()">
+                        🗑️ Discard & End Turn
+                      </button>
+                    ` : ''}
+                  </div>
+
+                  <!-- Melds Area -->
+                  <div class="grid grid-cols-2 gap-4 w-full">
+                    <div class="meld-area">
+                      <div class="text-white text-xs font-bold mb-2 uppercase tracking-wide">Your Team (${myTeam})</div>
+                      <div class="melds-container">
+                        ${myMelds.map((m, mIdx) => {
+                          const sequence = inferMeldSequence(toArray(m));
+                          const isBiribaClass = isBiriba(m) ? 'biriba' : '';
+                          return `
+                          <div class="meld ${isBiribaClass} ${this.selectedMeldIndex === mIdx ? 'selected-meld' : ''}" data-meld-index="${mIdx}">
+                            <div class="meld-cards">
+                              ${sequence.map((c, cIdx) => {
+                                const canDrag = isWild(c) && this.isMyTurn() && this.hasDrawnThisTurn();
+                                return this.cardEl(c, { meldCard: true, offset: cIdx, draggable: canDrag, meldIndex: mIdx, cardIndex: cIdx });
+                              }).join('')}
+                            </div>
+                            ${this.selectedCards.size > 0 ? `
+                              <button class="meld-add-btn" onclick="game.selectMeld(${mIdx})">
+                                ${this.selectedMeldIndex === mIdx ? '✓' : '+'}
+                              </button>
+                            ` : ''}
+                          </div>
+                        `}).join('')}
+                      </div>
+                      ${myMelds.length === 0 ? '<div class="text-white/40 text-xs text-center p-3">No melds yet</div>' : ''}
+                    </div>
+                    <div class="meld-area">
+                      <div class="text-white text-xs font-bold mb-2 uppercase tracking-wide">Opponent (${oppTeam})</div>
+                      <div class="melds-container">
+                        ${oppMelds.map(m => {
+                          const sequence = inferMeldSequence(toArray(m));
+                          const isBiribaClass = isBiriba(m) ? 'biriba' : '';
+                          return `
+                          <div class="meld ${isBiribaClass}">
+                            <div class="meld-cards">
+                              ${sequence.map((c, idx) => this.cardEl(c, { meldCard: true, offset: idx })).join('')}
+                            </div>
+                          </div>
+                        `}).join('')}
+                      </div>
+                      ${oppMelds.length === 0 ? '<div class="text-white/40 text-xs text-center p-3">No melds yet</div>' : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Bottom Player (Me) - EXTRA SPACING -->
+                <div class="absolute left-1/2 -translate-x-1/2" style="bottom: 20px; max-width: 95%;">
+                  <div class="flex flex-col items-center gap-3" style="padding-top: 30px;">
+                    ${this.playerBadge(seat.bottom)}
+                    <div class="flex gap-1.5 overflow-x-auto" style="max-width: 100%; padding-bottom: 30px;">
+                      ${myHand.map(c => this.cardEl(c, { selectable: true })).join('')}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        `;
+
+        setTimeout(() => this.setupDragAndDrop(), 0);
+      }
+
+      async join(name, team) {
+        if (!name?.trim()) return;
+        try { localStorage.setItem('biriba_name', name) } catch { }
+        await set(ref(db, `games/${this.gameId}/players/${this.playerId}`), { id: this.playerId, name });
+        await runTransaction(ref(db, `games/${this.gameId}/teams/${team}`), (cur) => {
+          const list = toArray(cur);
+          if (list.includes(this.playerId) || list.length >= 2) return list;
+          return [...list, this.playerId];
+        });
+      }
+    }
+
+    const game = new Game();
+    window.game = game;
+    game.init();
+  </script>
+</body>
+</html>
